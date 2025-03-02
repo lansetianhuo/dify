@@ -377,6 +377,10 @@ x-shared-env: &shared-api-worker-env
   SSRF_COREDUMP_DIR: ${SSRF_COREDUMP_DIR:-/var/spool/squid}
   SSRF_REVERSE_PROXY_PORT: ${SSRF_REVERSE_PROXY_PORT:-8194}
   SSRF_SANDBOX_HOST: ${SSRF_SANDBOX_HOST:-sandbox}
+  SSRF_DEFAULT_TIME_OUT: ${SSRF_DEFAULT_TIME_OUT:-5}
+  SSRF_DEFAULT_CONNECT_TIME_OUT: ${SSRF_DEFAULT_CONNECT_TIME_OUT:-5}
+  SSRF_DEFAULT_READ_TIME_OUT: ${SSRF_DEFAULT_READ_TIME_OUT:-5}
+  SSRF_DEFAULT_WRITE_TIME_OUT: ${SSRF_DEFAULT_WRITE_TIME_OUT:-5}
   EXPOSE_NGINX_PORT: ${EXPOSE_NGINX_PORT:-80}
   EXPOSE_NGINX_SSL_PORT: ${EXPOSE_NGINX_SSL_PORT:-443}
   POSITION_TOOL_PINS: ${POSITION_TOOL_PINS:-}
@@ -389,12 +393,29 @@ x-shared-env: &shared-api-worker-env
   CREATE_TIDB_SERVICE_JOB_ENABLED: ${CREATE_TIDB_SERVICE_JOB_ENABLED:-false}
   MAX_SUBMIT_COUNT: ${MAX_SUBMIT_COUNT:-100}
   TOP_K_MAX_VALUE: ${TOP_K_MAX_VALUE:-10}
+  DB_PLUGIN_DATABASE: ${DB_PLUGIN_DATABASE:-dify_plugin}
+  EXPOSE_PLUGIN_DAEMON_PORT: ${EXPOSE_PLUGIN_DAEMON_PORT:-5002}
+  PLUGIN_DAEMON_PORT: ${PLUGIN_DAEMON_PORT:-5002}
+  PLUGIN_DAEMON_KEY: ${PLUGIN_DAEMON_KEY:-lYkiYYT6owG+71oLerGzA7GXCgOT++6ovaezWAjpCjf+Sjc3ZtU+qUEi}
+  PLUGIN_DAEMON_URL: ${PLUGIN_DAEMON_URL:-http://plugin_daemon:5002}
+  PLUGIN_MAX_PACKAGE_SIZE: ${PLUGIN_MAX_PACKAGE_SIZE:-52428800}
+  PLUGIN_PPROF_ENABLED: ${PLUGIN_PPROF_ENABLED:-false}
+  PLUGIN_DEBUGGING_HOST: ${PLUGIN_DEBUGGING_HOST:-0.0.0.0}
+  PLUGIN_DEBUGGING_PORT: ${PLUGIN_DEBUGGING_PORT:-5003}
+  EXPOSE_PLUGIN_DEBUGGING_HOST: ${EXPOSE_PLUGIN_DEBUGGING_HOST:-localhost}
+  EXPOSE_PLUGIN_DEBUGGING_PORT: ${EXPOSE_PLUGIN_DEBUGGING_PORT:-5003}
+  PLUGIN_DIFY_INNER_API_KEY: ${PLUGIN_DIFY_INNER_API_KEY:-QaHbTe77CtuXmsfyhR7+vRjI/+XbV1AaFy691iy+kGDv2Jvy0/eAh8Y1}
+  PLUGIN_DIFY_INNER_API_URL: ${PLUGIN_DIFY_INNER_API_URL:-http://api:5001}
+  ENDPOINT_URL_TEMPLATE: ${ENDPOINT_URL_TEMPLATE:-http://localhost/e/{hook_id}}
+  MARKETPLACE_ENABLED: ${MARKETPLACE_ENABLED:-true}
+  MARKETPLACE_API_URL: ${MARKETPLACE_API_URL:-https://marketplace.dify.ai}
+  FORCE_VERIFYING_SIGNATURE: ${FORCE_VERIFYING_SIGNATURE:-true}
 
 services:
   # API service
   api:
-    image: langgenius/dify-api:0.15.2
-    restart: no
+    image: langgenius/dify-api:1.0.0
+    restart: always
     environment:
       # Use the shared environment variables.
       <<: *shared-api-worker-env
@@ -403,6 +424,8 @@ services:
       SENTRY_DSN: ${API_SENTRY_DSN:-}
       SENTRY_TRACES_SAMPLE_RATE: ${API_SENTRY_TRACES_SAMPLE_RATE:-1.0}
       SENTRY_PROFILES_SAMPLE_RATE: ${API_SENTRY_PROFILES_SAMPLE_RATE:-1.0}
+      PLUGIN_MAX_PACKAGE_SIZE: ${PLUGIN_MAX_PACKAGE_SIZE:-52428800}
+      INNER_API_KEY_FOR_PLUGIN: ${PLUGIN_DIFY_INNER_API_KEY:-QaHbTe77CtuXmsfyhR7+vRjI/+XbV1AaFy691iy+kGDv2Jvy0/eAh8Y1}
     depends_on:
       - db
       - redis
@@ -416,8 +439,8 @@ services:
   # worker service
   # The Celery worker for processing the queue.
   worker:
-    image: langgenius/dify-api:0.15.2
-    restart: no
+    image: langgenius/dify-api:1.0.0
+    restart: always
     environment:
       # Use the shared environment variables.
       <<: *shared-api-worker-env
@@ -426,6 +449,8 @@ services:
       SENTRY_DSN: ${API_SENTRY_DSN:-}
       SENTRY_TRACES_SAMPLE_RATE: ${API_SENTRY_TRACES_SAMPLE_RATE:-1.0}
       SENTRY_PROFILES_SAMPLE_RATE: ${API_SENTRY_PROFILES_SAMPLE_RATE:-1.0}
+      PLUGIN_MAX_PACKAGE_SIZE: ${PLUGIN_MAX_PACKAGE_SIZE:-52428800}
+      INNER_API_KEY_FOR_PLUGIN: ${PLUGIN_DIFY_INNER_API_KEY:-QaHbTe77CtuXmsfyhR7+vRjI/+XbV1AaFy691iy+kGDv2Jvy0/eAh8Y1}
     depends_on:
       - db
       - redis
@@ -438,8 +463,8 @@ services:
 
   # Frontend web application.
   web:
-    image: langgenius/dify-web:0.15.2
-    restart: no
+    image: langgenius/dify-web:1.0.0
+    restart: always
     environment:
       CONSOLE_API_URL: ${CONSOLE_API_URL:-}
       APP_API_URL: ${APP_API_URL:-}
@@ -447,13 +472,16 @@ services:
       NEXT_TELEMETRY_DISABLED: ${NEXT_TELEMETRY_DISABLED:-0}
       TEXT_GENERATION_TIMEOUT_MS: ${TEXT_GENERATION_TIMEOUT_MS:-60000}
       CSP_WHITELIST: ${CSP_WHITELIST:-}
+      MARKETPLACE_API_URL: ${MARKETPLACE_API_URL:-https://marketplace.dify.ai}
+      MARKETPLACE_URL: ${MARKETPLACE_URL:-https://marketplace.dify.ai}
       TOP_K_MAX_VALUE: ${TOP_K_MAX_VALUE:-}
       INDEXING_MAX_SEGMENTATION_TOKENS_LENGTH: ${INDEXING_MAX_SEGMENTATION_TOKENS_LENGTH:-}
+      PM2_INSTANCES: ${PM2_INSTANCES:-2}
 
   # The postgres database.
   db:
     image: postgres:15-alpine
-    restart: no
+    restart: always
     environment:
       PGUSER: ${PGUSER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-difyai123456}
@@ -472,11 +500,13 @@ services:
       interval: 1s
       timeout: 3s
       retries: 30
+    ports:
+      - '${EXPOSE_DB_PORT:-5432}:5432'
 
   # The redis cache.
   redis:
     image: redis:6-alpine
-    restart: no
+    restart: always
     environment:
       REDISCLI_AUTH: ${REDIS_PASSWORD:-difyai123456}
     volumes:
@@ -490,7 +520,7 @@ services:
   # The DifySandbox
   sandbox:
     image: langgenius/dify-sandbox:0.2.10
-    restart: no
+    restart: always
     environment:
       # The DifySandbox configurations
       # Make sure you are changing this key for your deployment with a strong key.
@@ -504,17 +534,42 @@ services:
       SANDBOX_PORT: ${SANDBOX_PORT:-8194}
     volumes:
       - ./volumes/sandbox/dependencies:/dependencies
+      - ./volumes/sandbox/conf:/conf
     healthcheck:
       test: [ 'CMD', 'curl', '-f', 'http://localhost:8194/health' ]
     networks:
       - ssrf_proxy_network
+
+  # plugin daemon
+  plugin_daemon:
+    image: langgenius/dify-plugin-daemon:0.0.3-local
+    restart: always
+    environment:
+      # Use the shared environment variables.
+      <<: *shared-api-worker-env
+      DB_DATABASE: ${DB_PLUGIN_DATABASE:-dify_plugin}
+      SERVER_PORT: ${PLUGIN_DAEMON_PORT:-5002}
+      SERVER_KEY: ${PLUGIN_DAEMON_KEY:-lYkiYYT6owG+71oLerGzA7GXCgOT++6ovaezWAjpCjf+Sjc3ZtU+qUEi}
+      MAX_PLUGIN_PACKAGE_SIZE: ${PLUGIN_MAX_PACKAGE_SIZE:-52428800}
+      PPROF_ENABLED: ${PLUGIN_PPROF_ENABLED:-false}
+      DIFY_INNER_API_URL: ${PLUGIN_DIFY_INNER_API_URL:-http://api:5001}
+      DIFY_INNER_API_KEY: ${INNER_API_KEY_FOR_PLUGIN:-QaHbTe77CtuXmsfyhR7+vRjI/+XbV1AaFy691iy+kGDv2Jvy0/eAh8Y1}
+      PLUGIN_REMOTE_INSTALLING_HOST: ${PLUGIN_REMOTE_INSTALL_HOST:-0.0.0.0}
+      PLUGIN_REMOTE_INSTALLING_PORT: ${PLUGIN_REMOTE_INSTALL_PORT:-5003}
+      PLUGIN_WORKING_PATH: ${PLUGIN_WORKING_PATH:-/app/storage/cwd}
+      FORCE_VERIFYING_SIGNATURE: ${FORCE_VERIFYING_SIGNATURE:-true}
+    ports:
+      - "${EXPOSE_PLUGIN_DEBUGGING_PORT:-5003}:${PLUGIN_DEBUGGING_PORT:-5003}"
+    volumes:
+      - ./volumes/plugin_daemon:/app/storage
+
 
   # ssrf_proxy server
   # for more information, please refer to
   # https://docs.dify.ai/learn-more/faq/install-faq#id-18.-why-is-ssrf_proxy-needed
   ssrf_proxy:
     image: ubuntu/squid:latest
-    restart: no
+    restart: always
     volumes:
       - ./ssrf_proxy/squid.conf.template:/etc/squid/squid.conf.template
       - ./ssrf_proxy/docker-entrypoint.sh:/docker-entrypoint-mount.sh
@@ -554,7 +609,7 @@ services:
   # used for reverse proxying the API service and Web service.
   nginx:
     image: nginx:latest
-    restart: no
+    restart: always
     volumes:
       - ./nginx/nginx.conf.template:/etc/nginx/nginx.conf.template
       - ./nginx/proxy.conf.template:/etc/nginx/proxy.conf.template
@@ -590,23 +645,13 @@ services:
       - '${EXPOSE_NGINX_PORT:-80}:${NGINX_PORT:-80}'
       - '${EXPOSE_NGINX_SSL_PORT:-443}:${NGINX_SSL_PORT:-443}'
 
-  # The TiDB vector store.
-  # For production use, please refer to https://github.com/pingcap/tidb-docker-compose
-  tidb:
-    image: pingcap/tidb:v8.4.0
-    profiles:
-      - tidb
-    command:
-      - --store=unistore
-    restart: no
-
   # The Weaviate vector store.
   weaviate:
     image: semitechnologies/weaviate:1.19.0
     profiles:
       - ''
       - weaviate
-    restart: no
+    restart: always
     volumes:
       # Mount the Weaviate data directory to the con tainer.
       - ./volumes/weaviate:/var/lib/weaviate
@@ -630,7 +675,7 @@ services:
     image: langgenius/qdrant:v1.7.3
     profiles:
       - qdrant
-    restart: no
+    restart: always
     volumes:
       - ./volumes/qdrant:/qdrant/storage
     environment:
@@ -641,7 +686,7 @@ services:
     build: ./couchbase-server
     profiles:
       - couchbase
-    restart: no
+    restart: always
     environment:
       - CLUSTER_NAME=dify_search
       - COUCHBASE_ADMINISTRATOR_USERNAME=${COUCHBASE_USER:-Administrator}
@@ -674,7 +719,7 @@ services:
     image: pgvector/pgvector:pg16
     profiles:
       - pgvector
-    restart: no
+    restart: always
     environment:
       PGUSER: ${PGVECTOR_PGUSER:-postgres}
       # The password for the default postgres user.
@@ -696,7 +741,7 @@ services:
     image: tensorchord/pgvecto-rs:pg16-v0.3.0
     profiles:
       - pgvecto-rs
-    restart: no
+    restart: always
     environment:
       PGUSER: ${PGVECTOR_PGUSER:-postgres}
       # The password for the default postgres user.
@@ -718,7 +763,7 @@ services:
     image: ghcr.io/chroma-core/chroma:0.5.20
     profiles:
       - chroma
-    restart: no
+    restart: always
     volumes:
       - ./volumes/chroma:/chroma/chroma
     environment:
@@ -731,7 +776,7 @@ services:
     image: quay.io/oceanbase/oceanbase-ce:4.3.3.0-100000142024101215
     profiles:
       - oceanbase
-    restart: no
+    restart: always
     volumes:
       - ./volumes/oceanbase/data:/root/ob
       - ./volumes/oceanbase/conf:/root/.obd/cluster
@@ -748,7 +793,7 @@ services:
     image: container-registry.oracle.com/database/free:latest
     profiles:
       - oracle
-    restart: no
+    restart: always
     volumes:
       - source: oradata
         type: volume
@@ -869,7 +914,7 @@ services:
     image: myscale/myscaledb:1.6.4
     profiles:
       - myscale
-    restart: no
+    restart: always
     tty: true
     volumes:
       - ./volumes/myscale/data:/var/lib/clickhouse
@@ -886,7 +931,7 @@ services:
     profiles:
       - elasticsearch
       - elasticsearch-ja
-    restart: no
+    restart: always
     volumes:
       - ./elasticsearch/docker-entrypoint.sh:/docker-entrypoint-mount.sh
       - dify_es01_data:/usr/share/elasticsearch/data
@@ -922,7 +967,7 @@ services:
       - elasticsearch
     depends_on:
       - elasticsearch
-    restart: no
+    restart: always
     environment:
       XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY: d1a66dfd-c4d3-4a0a-8290-2abcb83ab3aa
       NO_PROXY: localhost,127.0.0.1,elasticsearch,kibana
@@ -947,7 +992,7 @@ services:
     image: downloads.unstructured.io/unstructured-io/unstructured-api:latest
     profiles:
       - unstructured
-    restart: no
+    restart: always
     volumes:
       - ./volumes/unstructured:/app/data
 
